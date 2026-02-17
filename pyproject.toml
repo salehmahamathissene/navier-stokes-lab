@@ -5,11 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "navier-stokes-lab"
 version = "0.1.0"
+description = "Educational, research-style 2D incompressible Navier–Stokes solver (projection method + FFT Poisson) with Taylor–Green vortex benchmark."
+readme = "README.md"
 requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{ name = "Saleh Mahamat" }]
+keywords = ["navier-stokes", "incompressible", "cfd", "pde", "spectral", "fft", "projection-method"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Topic :: Scientific/Engineering :: Physics",
+]
 dependencies = ["numpy", "scipy", "matplotlib"]
+
+[project.urls]
+Repository = "https://github.com/salehmahamathissene/navier-stokes-lab"
+Issues = "https://github.com/salehmahamathissene/navier-stokes-lab/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
