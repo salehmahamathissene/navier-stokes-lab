@@ -10,17 +10,31 @@ and validates using the **Taylor–Green vortex** benchmark.
 
 ## Mathematical model
 
-We solve the incompressible Navier–Stokes equations:
-\[
-\partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\nabla p + \nu \Delta \mathbf{u},\qquad
-\nabla\cdot\mathbf{u}=0.
-\]
+We solve the 2D incompressible Navier–Stokes equations on a periodic square:
 
-- \(\mathbf{u}(x,y,t)\): velocity
-- \(p(x,y,t)\): pressure
-- \(\nu\): kinematic viscosity
+∂t u + (u·∇)u = −∇p + ν Δu  
+∇·u = 0
 
-Domain: periodic square \([0,2\pi]^2\).
+where:
+- u(x,y,t): velocity
+- p(x,y,t): pressure
+- ν: kinematic viscosity
+- domain: [0, 2π]² (periodic)
+
+## Numerical method (projection / fractional step)
+
+At each time step:
+
+1) Advection + diffusion → intermediate velocity u*  
+2) Pressure Poisson equation:
+
+Δp = (1/Δt) ∇·u*
+
+3) Projection:
+
+uⁿ⁺¹ = u* − Δt ∇p
+
+This enforces ∇·uⁿ⁺¹ ≈ 0 up to discretization error.
 
 ---
 
