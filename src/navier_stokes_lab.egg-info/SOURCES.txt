@@ -1,0 +1,8 @@
+pyproject.toml
+src/navier_stokes_lab.egg-info/PKG-INFO
+src/navier_stokes_lab.egg-info/SOURCES.txt
+src/navier_stokes_lab.egg-info/dependency_links.txt
+src/navier_stokes_lab.egg-info/requires.txt
+src/navier_stokes_lab.egg-info/top_level.txt
+src/ns/__init__.py
+src/ns/solver.py
