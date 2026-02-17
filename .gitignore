@@ -20,3 +20,13 @@ results/
 .venv/
 __pycache__/
 *.pyc
+
+# build / packaging
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# python cache
+__pycache__/
+*.pyc
