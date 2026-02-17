@@ -38,19 +38,6 @@ This enforces ∇·uⁿ⁺¹ ≈ 0 up to discretization error.
 
 ---
 
-## Numerical method (projection)
-
-At each step:
-1. **Advection + diffusion** to compute intermediate velocity \( \mathbf{u}^\* \)
-2. **Pressure Poisson solve**
-\[
-\Delta p = \frac{1}{\Delta t}\nabla\cdot \mathbf{u}^\*
-\]
-3. **Projection**
-\[
-\mathbf{u}^{n+1} = \mathbf{u}^\* - \Delta t \nabla p
-\]
-so that \(\nabla\cdot \mathbf{u}^{n+1} \approx 0\).
 
 ---
 
