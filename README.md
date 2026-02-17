@@ -8,5 +8,6 @@ a projection method and FFT Poisson solve.
 python -m venv .venv
 source .venv/bin/activate
 pip install -U pip
+pip install -r requirements.txt
 pip install -e .
-
+python scripts/run_taylor_green.py
