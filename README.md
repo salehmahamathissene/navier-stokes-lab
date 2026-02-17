@@ -1,3 +1,6 @@
+![CI](https://github.com/salehmahamathissene/navier-stokes-lab/actions/workflows/ci.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 # navier-stokes-lab
 
 **Educational, research-style** 2D incompressible Navier–Stokes solver on a periodic square.
@@ -35,8 +38,6 @@ At each time step:
 uⁿ⁺¹ = u* − Δt ∇p
 
 This enforces ∇·uⁿ⁺¹ ≈ 0 up to discretization error.
-
----
 
 
 ---
