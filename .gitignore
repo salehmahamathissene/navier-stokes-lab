@@ -17,3 +17,6 @@ build/
 
 # outputs (optional)
 results/
+.venv/
+__pycache__/
+*.pyc
