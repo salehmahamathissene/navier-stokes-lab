@@ -15,9 +15,44 @@ def _try_import(modname: str):
         return None
 
 
-def _call_with_supported_kwargs(fn, **kwargs):
+def _call_with_supported_kwargs(fn, nx: int, ny: int, **kwargs):
+    """
+    Call fn with only supported kwargs, AND auto-fill required parameters like p/u/v if needed.
+    This is signature-driven (no hardcoding your solver).
+    """
     sig = inspect.signature(fn)
+
     supported = {k: v for k, v in kwargs.items() if k in sig.parameters}
+
+    # Auto-fill required params that have no defaults
+    for name, p in sig.parameters.items():
+        if name in supported:
+            continue
+        if p.default is not inspect._empty:
+            continue  # has default, not required
+        if p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            continue
+
+        # If required array-like state is missing, create it using nx/ny
+        if name in ("p", "pressure"):
+            supported[name] = np.zeros((ny, nx), dtype=float)
+            continue
+        if name in ("u", "U"):
+            supported[name] = np.zeros((ny, nx), dtype=float)
+            continue
+        if name in ("v", "V"):
+            supported[name] = np.zeros((ny, nx), dtype=float)
+            continue
+        if name in ("b", "rhs"):
+            supported[name] = np.zeros((ny, nx), dtype=float)
+            continue
+
+        # If we get here, it's a required argument we cannot safely invent
+        raise RuntimeError(
+            f"Backend function '{fn.__module__}.{fn.__name__}' requires parameter '{name}' "
+            f"with no default. I cannot auto-create it safely."
+        )
+
     return fn(**supported)
 
 
