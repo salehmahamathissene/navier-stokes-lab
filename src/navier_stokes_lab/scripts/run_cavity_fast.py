@@ -2,65 +2,63 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-
 import numpy as np
 
-# Headless-safe backend for Render/Linux servers
 import matplotlib
 matplotlib.use("Agg")
-
 import matplotlib.pyplot as plt
 
-from navier_stokes_lab.cavity import run_lid_driven_cavity
-
-
-def _compute_speed_vorticity(result: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-    """
-    NO guessing about solver internals, but we must pick expected keys.
-    For a lid-driven cavity solver, velocity fields are commonly u,v.
-    If your solver returns different keys, this will error and show the keys.
-    """
-    if "u" not in result or "v" not in result:
-        raise RuntimeError(
-            f"Solver output keys: {sorted(result.keys())}. Expected at least 'u' and 'v'."
-        )
-
-    u = result["u"]
-    v = result["v"]
-
-    speed = np.sqrt(u * u + v * v)
-
-    # vorticity = dv/dx - du/dy
-    dvdx = np.gradient(v, axis=1)
-    dudy = np.gradient(u, axis=0)
-    vort = dvdx - dudy
-
-    return speed, vort
+from navier_stokes_lab.cavity import run_cavity
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Fast lid-driven cavity demo (PNG outputs).")
-    ap.add_argument("--out", required=True, help="Output directory (e.g. /tmp/out)")
-    ap.add_argument("--nx", type=int, default=64)
-    ap.add_argument("--ny", type=int, default=64)
-    ap.add_argument("--steps", type=int, default=200)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--n", type=int, default=64, help="Grid size (n x n)")
+    ap.add_argument("--re", type=float, default=1000.0)
     ap.add_argument("--dt", type=float, default=0.005)
+    ap.add_argument("--t-end", type=float, default=1.0, help="Final time (smaller = faster)")
+    ap.add_argument("--lid-u", type=float, default=1.0)
+    ap.add_argument("--save-every", type=int, default=200)
+    ap.add_argument("--poisson-iters", type=int, default=200)
+    ap.add_argument("--poisson-tol", type=float, default=0.0)
     args = ap.parse_args(argv)
 
     out_dir = Path(args.out).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print("🚀 Running Lid-Driven Cavity Simulation...")
-    print(f"Grid: {args.nx} x {args.ny}, Steps: {args.steps}, dt={args.dt}")
+    print(f"n={args.n} re={args.re} dt={args.dt} t_end={args.t_end}")
     print(f"Output dir: {out_dir}")
 
-    result = run_lid_driven_cavity(nx=args.nx, ny=args.ny, steps=args.steps, dt=args.dt)
-    speed, vort = _compute_speed_vorticity(result)
+    out = run_cavity(
+        n=args.n,
+        re=args.re,
+        dt=args.dt,
+        t_end=args.t_end,
+        lid_u=args.lid_u,
+        save_every=args.save_every,
+        poisson_iters=args.poisson_iters,
+        poisson_tol=args.poisson_tol,
+    )
+
+    print("Solver output keys:", sorted(out.keys()))
+
+    # Require u,v keys (if solver uses different keys, you will SEE them above)
+    if "u" not in out or "v" not in out:
+        raise RuntimeError(f"Missing u/v in output. Keys: {sorted(out.keys())}")
+
+    u = out["u"]
+    v = out["v"]
+    speed = np.sqrt(u*u + v*v)
+
+    dvdx = np.gradient(v, axis=1)
+    dudy = np.gradient(u, axis=0)
+    vort = dvdx - dudy
 
     speed_path = out_dir / "cavity_fast_speed.png"
     vort_path = out_dir / "cavity_fast_vorticity.png"
 
-    # Speed plot
     plt.figure()
     plt.imshow(speed, origin="lower")
     plt.colorbar()
@@ -69,7 +67,6 @@ def main(argv: list[str] | None = None) -> int:
     plt.savefig(speed_path, dpi=150)
     plt.close()
 
-    # Vorticity plot
     plt.figure()
     plt.imshow(vort, origin="lower")
     plt.colorbar()
