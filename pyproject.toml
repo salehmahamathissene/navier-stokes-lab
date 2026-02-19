@@ -36,3 +36,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+
+[project.scripts]
+ns-cavity-fast = "navier_stokes_lab.scripts.run_cavity_fast:main"
