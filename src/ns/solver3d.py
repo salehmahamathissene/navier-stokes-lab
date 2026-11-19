@@ -41,16 +41,31 @@ def _grad_hat(fhat: np.ndarray, kx: np.ndarray, ky: np.ndarray, kz: np.ndarray) 
 
 
 def _project_incompressible(uhat: np.ndarray, vhat: np.ndarray, what: np.ndarray, kx: np.ndarray, ky: np.ndarray, kz: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    k2 = kx*kx + ky*ky + kz*kz
-    k2[0, 0, 0] = 1.0  # avoid divide-by-zero at mean mode
+    # For even grids, the real-data Nyquist bin is self-conjugate.  Using
+    # -N/2 directly as a signed derivative mode breaks Hermitian symmetry.
+    # Its derivative convention is zero for real fields.
+    nx, ny, nz = kx.shape
+    projection_kx = kx.copy()
+    projection_ky = ky.copy()
+    projection_kz = kz.copy()
+    if nx % 2 == 0:
+        projection_kx[np.abs(projection_kx) == nx//2] = 0.0
+    if ny % 2 == 0:
+        projection_ky[np.abs(projection_ky) == ny//2] = 0.0
+    if nz % 2 == 0:
+        projection_kz[np.abs(projection_kz) == nz//2] = 0.0
 
-    div_hat = 1j*(kx*uhat + ky*vhat + kz*what)
-    # subtract gradient of pressure: u <- u - k*(div)/k^2
-    uhat_p = uhat - 1j*kx*div_hat / k2
-    vhat_p = vhat - 1j*ky*div_hat / k2
-    what_p = what - 1j*kz*div_hat / k2
+    k2 = projection_kx*projection_kx + projection_ky*projection_ky + projection_kz*projection_kz
+    div_hat = 1j*(projection_kx*uhat + projection_ky*vhat + projection_kz*what)
+    uhat_p = uhat.copy()
+    vhat_p = vhat.copy()
+    what_p = what.copy()
 
-    # set mean mode unchanged
+    nonzero = k2 != 0.0
+    uhat_p[nonzero] = uhat[nonzero] + 1j*projection_kx[nonzero]*div_hat[nonzero]/k2[nonzero]
+    vhat_p[nonzero] = vhat[nonzero] + 1j*projection_ky[nonzero]*div_hat[nonzero]/k2[nonzero]
+    what_p[nonzero] = what[nonzero] + 1j*projection_kz[nonzero]*div_hat[nonzero]/k2[nonzero]
+
     uhat_p[0, 0, 0] = uhat[0, 0, 0]
     vhat_p[0, 0, 0] = vhat[0, 0, 0]
     what_p[0, 0, 0] = what[0, 0, 0]
