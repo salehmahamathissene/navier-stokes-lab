@@ -3,45 +3,81 @@
 
 # Navier–Stokes Lab
 
-Navier–Stokes Lab is a Python scientific-computing project for educational use
-and numerical experimentation with incompressible flow. Its 3D solver uses a
-Fourier pseudospectral method on a periodic domain and includes Taylor–Green and
-ABC Beltrami initial conditions. The repository also contains a 2D periodic
-projection solver and a lid-driven-cavity example. It is not presented as a
-production CFD package or as a certified solver.
+Navier–Stokes Lab is a Python scientific-computing project containing 2D and 3D
+incompressible Navier–Stokes solvers for educational use and numerical
+experimentation. The 2D solver uses a finite-difference fractional-step
+projection method on a periodic square; the 3D solver uses a Fourier
+pseudospectral method on a periodic cube. The repository also includes a
+lid-driven-cavity example. It is not presented as a production CFD package or
+as a certified solver.
+
+## Numerical methods: 2D and 3D solvers
+
+The two solvers use distinct spatial discretizations and pressure treatments:
+
+**2D periodic solver** (`src/ns/solver.py`, demonstrated by
+`scripts/run_taylor_green.py`)
+
+- Advances incompressible flow on a periodic square.
+- Uses central finite differences for derivatives, advection, and diffusion.
+- Treats both advection and diffusion explicitly to form an intermediate
+  velocity.
+- Solves a pressure Poisson equation with an FFT, then corrects velocity using
+  the pressure gradient.
+- Includes a Taylor–Green vortex demonstration.
+
+**3D spectral solver** (`src/ns/solver3d.py`)
+
+- Uses a periodic three-dimensional Fourier pseudospectral formulation with
+  spectral derivatives.
+- Forms the nonlinear advective term in physical space and treats it
+  explicitly.
+- Treats diffusion implicitly with backward Euler in Fourier space.
+- Projects velocity onto the divergence-free subspace in Fourier space.
+- Applies optional 2/3-rule dealiasing to the nonlinear term; it is enabled by
+  default.
+- Includes a Taylor–Green initial condition and an ABC Beltrami exact-solution
+  benchmark.
 
 ## Scientific overview
 
 The 3D solver advances the incompressible Navier–Stokes equations,
 
-\[
+$$
 \partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u}
 = -\nabla p + \nu \nabla^2\mathbf{u},
 \qquad \nabla\cdot\mathbf{u}=0,
-\]
+$$
 
-on the periodic cube \([0,2\pi)^3\), sampled on an \(n\times n\times n\) grid.
+on the periodic cube $[0,2\pi)^3$, sampled on an $n\times n\times n$ grid.
 Spatial derivatives are evaluated spectrally using FFTs. The nonlinear
 advective term is formed in physical space from the Fourier derivatives, then
 transformed back to Fourier space. When dealiasing is enabled, a 2/3-rule mask
 is applied to its Fourier coefficients; the mask retains coordinate modes
-through \(\lfloor n/3\rfloor\).
+through $\lfloor n/3\rfloor$.
 
 For each step, the solver treats advection explicitly and diffusion implicitly:
 
-\[
+$$
 \widehat{\mathbf{u}}^{*}
 = \frac{\widehat{\mathbf{u}}^{\,n}
 - \Delta t\,\widehat{(\mathbf{u}\cdot\nabla)\mathbf{u}}^{\,n}}
 {1+\nu\Delta t\,|\mathbf{k}|^2}.
-\]
+$$
 
 It then projects the intermediate velocity onto the divergence-free subspace
-in Fourier space. For nonzero wavevectors this projection uses
-\(I-\mathbf{k}\mathbf{k}^{T}/|\mathbf{k}|^2\); the zero-frequency mean is
-preserved. This is explicit Euler treatment of the nonlinear term with
-backward Euler diffusion and a subsequent incompressibility projection. The
-3D implementation does not solve for or return a pressure field.
+in Fourier space. For nonzero wavevectors the projection is
+
+$$
+\widehat{\mathbf{u}}^{\,n+1}
+= \left(I-\frac{\mathbf{k}\mathbf{k}^{\mathsf T}}{|\mathbf{k}|^2}\right)
+\widehat{\mathbf{u}}^{*}, \qquad \mathbf{k}\ne 0.
+$$
+
+The zero-frequency mean is preserved. This is explicit Euler treatment of the
+nonlinear term with backward Euler diffusion and a subsequent incompressibility
+projection. The 3D implementation does not solve for or return a pressure
+field.
 
 ## Implemented benchmarks
 
@@ -58,36 +94,38 @@ saves energy, divergence, and vorticity plots.
 
 The 3D ABC benchmark uses the initial velocity field
 
-\[
+$$
 \mathbf{A}(x,y,z)
 = \bigl(\sin z+\cos y,\ \sin x+\cos z,\ \sin y+\cos x\bigr).
-\]
+$$
 
 It satisfies
 
-\[
+$$
 \nabla\cdot\mathbf{A}=0,\qquad
 \nabla\times\mathbf{A}=\mathbf{A},\qquad
 \nabla^2\mathbf{A}=-\mathbf{A}.
-\]
+$$
 
-For kinematic viscosity \(\nu\), the exact velocity and domain-mean kinetic
+For kinematic viscosity $\nu$, the exact velocity and domain-mean kinetic
 energy are
 
-\[
-\mathbf{u}(\mathbf{x},t)=e^{-\nu t}\mathbf{A}(\mathbf{x}),\qquad
-E(t)=\frac{1}{2}\langle|\mathbf{u}|^2\rangle
-=\frac{3}{2}e^{-2\nu t}.
-\]
+$$
+\mathbf{u}(\mathbf{x},t)=e^{-\nu t}\mathbf{A}(\mathbf{x})
+$$
+
+$$
+E(t)=\frac{3}{2}e^{-2\nu t}
+$$
 
 An analytical pressure satisfying the momentum equation is
 
-\[
+$$
 p(\mathbf{x},t)
 =-\frac{1}{2}e^{-2\nu t}|\mathbf{A}(\mathbf{x})|^2+C(t),
-\]
+$$
 
-where \(C(t)\) is an arbitrary spatially uniform pressure gauge. This is an
+where $C(t)$ is an arbitrary spatially uniform pressure gauge. This is an
 analytical reference only: the 3D solver does not reconstruct pressure, and
 the benchmark does not compare a numerical pressure field.
 
@@ -138,13 +176,13 @@ The script prints a JSON report. Its diagnostic fields are:
 
 | Output field | Meaning |
 | --- | --- |
-| `relative_l2_error` | RMS Euclidean velocity error divided by the RMS exact speed |
-| `linf_error` | Maximum pointwise Euclidean velocity error |
-| `numerical_energy` | Final numerical mean kinetic energy, \(\frac12\langle|\mathbf{u}|^2\rangle\) |
+| `relative_l2_error` | RMS Euclidean velocity error divided by RMS exact speed: $\sqrt{\langle\lVert\mathbf{u}_{\mathrm{num}}-\mathbf{u}_{\mathrm{exact}}\rVert_2^2\rangle}/\sqrt{\langle\lVert\mathbf{u}_{\mathrm{exact}}\rVert_2^2\rangle}$ |
+| `linf_error` | Maximum pointwise Euclidean velocity error: $\max_{\mathbf{x}}\lVert\mathbf{u}_{\mathrm{num}}-\mathbf{u}_{\mathrm{exact}}\rVert_2$ |
+| `numerical_energy` | Final numerical mean kinetic energy, one half of the spatial average of squared velocity magnitude |
 | `exact_energy` | Exact mean kinetic energy at the final time |
 | `energy_absolute_error` | Absolute difference between numerical and exact energy |
 | `energy_relative_error` | Absolute energy error divided by exact energy |
-| `final_max_divergence` | Maximum absolute spectral divergence at the final time |
+| `final_max_divergence` | Maximum absolute spectral divergence at the final time: $\max_{\mathbf{x}}\lvert\nabla\cdot\mathbf{u}\rvert$ |
 
 The report also includes the grid size, viscosity, time step, step count, final
 time, and whether dealiasing is enabled.
@@ -157,11 +195,11 @@ comparison, and energy; the suite also includes projection and existing 2D
 solver tests.
 
 The ABC temporal-refinement test holds the final time and grid fixed
-(\(n=8\), \(\nu=0.1\), final time \(0.1\)) while reducing \(\Delta t\) from
+($n=8$, $\nu=0.1$, final time $0.1$) while reducing $\Delta t$ from
 0.01 to 0.005 to 0.0025. It checks decreasing errors and successive error
 ratios between 1.8 and 2.2, consistent with approximately first-order
 temporal behavior for that tested configuration. A separate low-mode test
-checks the ABC error on grids \(n=8,12,16\). Because this field is resolved on
+checks the ABC error on grids $n=8,12,16$. Because this field is resolved on
 each grid and the test checks grid-independence rather than an asymptotic error
 rate, it is not evidence of spectral convergence.
 
