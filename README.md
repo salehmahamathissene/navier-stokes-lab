@@ -1,65 +1,223 @@
 ![CI](https://github.com/salehmahamathissene/navier-stokes-lab/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-# navier-stokes-lab
+# Navier–Stokes Lab
 
-**Educational, research-style** 2D incompressible Navier–Stokes solver on a periodic square.
-Implements a **fractional-step (projection) method** with an FFT Poisson solve for pressure,
-and validates using the **Taylor–Green vortex** benchmark.
+Navier–Stokes Lab is a Python scientific-computing project for educational use
+and numerical experimentation with incompressible flow. Its 3D solver uses a
+Fourier pseudospectral method on a periodic domain and includes Taylor–Green and
+ABC Beltrami initial conditions. The repository also contains a 2D periodic
+projection solver and a lid-driven-cavity example. It is not presented as a
+production CFD package or as a certified solver.
 
-> Goal: demonstrate numerical PDE + scientific computing skills with clean, reproducible experiments.
+## Scientific overview
 
----
+The 3D solver advances the incompressible Navier–Stokes equations,
 
-## Mathematical model
+\[
+\partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u}
+= -\nabla p + \nu \nabla^2\mathbf{u},
+\qquad \nabla\cdot\mathbf{u}=0,
+\]
 
-We solve the 2D incompressible Navier–Stokes equations on a periodic square:
+on the periodic cube \([0,2\pi)^3\), sampled on an \(n\times n\times n\) grid.
+Spatial derivatives are evaluated spectrally using FFTs. The nonlinear
+advective term is formed in physical space from the Fourier derivatives, then
+transformed back to Fourier space. When dealiasing is enabled, a 2/3-rule mask
+is applied to its Fourier coefficients; the mask retains coordinate modes
+through \(\lfloor n/3\rfloor\).
 
-∂t u + (u·∇)u = −∇p + ν Δu  
-∇·u = 0
+For each step, the solver treats advection explicitly and diffusion implicitly:
 
-where:
-- u(x,y,t): velocity
-- p(x,y,t): pressure
-- ν: kinematic viscosity
-- domain: [0, 2π]² (periodic)
+\[
+\widehat{\mathbf{u}}^{*}
+= \frac{\widehat{\mathbf{u}}^{\,n}
+- \Delta t\,\widehat{(\mathbf{u}\cdot\nabla)\mathbf{u}}^{\,n}}
+{1+\nu\Delta t\,|\mathbf{k}|^2}.
+\]
 
-## Numerical method (projection / fractional step)
+It then projects the intermediate velocity onto the divergence-free subspace
+in Fourier space. For nonzero wavevectors this projection uses
+\(I-\mathbf{k}\mathbf{k}^{T}/|\mathbf{k}|^2\); the zero-frequency mean is
+preserved. This is explicit Euler treatment of the nonlinear term with
+backward Euler diffusion and a subsequent incompressibility projection. The
+3D implementation does not solve for or return a pressure field.
 
-At each time step:
+## Implemented benchmarks
 
-1) Advection + diffusion → intermediate velocity u*  
-2) Pressure Poisson equation:
+### Taylor–Green initial condition
 
-Δp = (1/Δt) ∇·u*
+The 3D solver provides a Taylor–Green initial condition and a runner that
+records kinetic-energy and maximum-divergence histories. Run
+`python scripts/run_taylor_green_3d.py` to generate those histories and save
+plots under `results/`. A separate 2D periodic projection demo is available as
+`python scripts/run_taylor_green.py`; it reports energy and divergence and
+saves energy, divergence, and vorticity plots.
 
-3) Projection:
+### ABC Beltrami exact solution
 
-uⁿ⁺¹ = u* − Δt ∇p
+The 3D ABC benchmark uses the initial velocity field
 
-This enforces ∇·uⁿ⁺¹ ≈ 0 up to discretization error.
+\[
+\mathbf{A}(x,y,z)
+= \bigl(\sin z+\cos y,\ \sin x+\cos z,\ \sin y+\cos x\bigr).
+\]
 
+It satisfies
 
----
+\[
+\nabla\cdot\mathbf{A}=0,\qquad
+\nabla\times\mathbf{A}=\mathbf{A},\qquad
+\nabla^2\mathbf{A}=-\mathbf{A}.
+\]
 
-## Benchmark: Taylor–Green vortex
+For kinematic viscosity \(\nu\), the exact velocity and domain-mean kinetic
+energy are
 
-The solver includes a Taylor–Green vortex run that reports:
-- kinetic energy decay (sanity/physics check)
-- maximum divergence \(\max|\nabla\cdot u|\) (incompressibility check)
-- vorticity snapshots
+\[
+\mathbf{u}(\mathbf{x},t)=e^{-\nu t}\mathbf{A}(\mathbf{x}),\qquad
+E(t)=\frac{1}{2}\langle|\mathbf{u}|^2\rangle
+=\frac{3}{2}e^{-2\nu t}.
+\]
 
-Example run output:
-- `max|div| ~ 1e-5` (expected small nonzero due to discretization & timestep)
+An analytical pressure satisfying the momentum equation is
 
----
+\[
+p(\mathbf{x},t)
+=-\frac{1}{2}e^{-2\nu t}|\mathbf{A}(\mathbf{x})|^2+C(t),
+\]
 
-## Quickstart
+where \(C(t)\) is an arbitrary spatially uniform pressure gauge. This is an
+analytical reference only: the 3D solver does not reconstruct pressure, and
+the benchmark does not compare a numerical pressure field.
+
+## Installation and setup
+
+Python 3.10 or later is required. The project declares NumPy, SciPy, and
+Matplotlib as runtime dependencies, and provides pytest as an optional
+development dependency (`pytest>=8`). CI is configured for Python 3.11 and
+3.12.
 
 ```bash
+git clone https://github.com/salehmahamathissene/navier-stokes-lab.git
+cd navier-stokes-lab
 python -m venv .venv
 source .venv/bin/activate
-pip install -U pip
-pip install -r requirements.txt
-pip install -e .
-python scripts/run_taylor_green.py
+python -m pip install -e ".[dev]"
+python -m pytest -q
+```
+
+On Windows PowerShell, activate the environment with
+`.venv\Scripts\Activate.ps1` instead of the `source` command.
+
+## Running the ABC benchmark
+
+Run the benchmark with the repository's script:
+
+```bash
+python scripts/run_abc_beltrami_3d.py
+```
+
+The available arguments and defaults are:
+
+| Argument | Default | Description |
+| --- | ---: | --- |
+| `--n` | `16` | Grid points in each direction |
+| `--nu` | `0.01` | Kinematic viscosity |
+| `--dt` | `0.0025` | Time step |
+| `--steps` | `40` | Number of time steps |
+| `--no-dealias` | off | Disable the default 2/3-rule dealiasing |
+
+For example:
+
+```bash
+python scripts/run_abc_beltrami_3d.py --n 16 --nu 0.01 --dt 0.0025 --steps 40
+```
+
+The script prints a JSON report. Its diagnostic fields are:
+
+| Output field | Meaning |
+| --- | --- |
+| `relative_l2_error` | RMS Euclidean velocity error divided by the RMS exact speed |
+| `linf_error` | Maximum pointwise Euclidean velocity error |
+| `numerical_energy` | Final numerical mean kinetic energy, \(\frac12\langle|\mathbf{u}|^2\rangle\) |
+| `exact_energy` | Exact mean kinetic energy at the final time |
+| `energy_absolute_error` | Absolute difference between numerical and exact energy |
+| `energy_relative_error` | Absolute energy error divided by exact energy |
+| `final_max_divergence` | Maximum absolute spectral divergence at the final time |
+
+The report also includes the grid size, viscosity, time step, step count, final
+time, and whether dealiasing is enabled.
+
+## Validation and tests
+
+The automated test suite covers solver behavior and benchmark properties. Its
+ABC tests check the initial field, divergence, a short exact-solution
+comparison, and energy; the suite also includes projection and existing 2D
+solver tests.
+
+The ABC temporal-refinement test holds the final time and grid fixed
+(\(n=8\), \(\nu=0.1\), final time \(0.1\)) while reducing \(\Delta t\) from
+0.01 to 0.005 to 0.0025. It checks decreasing errors and successive error
+ratios between 1.8 and 2.2, consistent with approximately first-order
+temporal behavior for that tested configuration. A separate low-mode test
+checks the ABC error on grids \(n=8,12,16\). Because this field is resolved on
+each grid and the test checks grid-independence rather than an asymptotic error
+rate, it is not evidence of spectral convergence.
+
+The current test run reports **15 tests passed**. Black formatting checks for
+the ABC script and its tests and a Python compile check also pass. These checks,
+including the exact-solution and temporal-refinement tests, are limited to
+their tested cases; they do not establish accuracy for every flow or grid.
+
+## Project structure
+
+```text
+.
+├── README.md
+├── pyproject.toml
+├── requirements.txt
+├── src/
+│   ├── ns/
+│   │   ├── solver.py
+│   │   ├── solver3d.py
+│   │   └── cavity.py
+│   └── navier_stokes_lab/
+│       ├── cavity.py
+│       └── scripts/run_cavity_fast.py
+├── tests/
+│   ├── test_abc_beltrami.py
+│   ├── test_cavity_smoke.py
+│   ├── test_divergence.py
+│   ├── test_energy_monotone.py
+│   ├── test_fft_poisson.py
+│   └── test_solver3d_projection.py
+└── scripts/
+    ├── run_abc_beltrami_3d.py
+    ├── run_cavity.py
+    ├── run_taylor_green.py
+    └── run_taylor_green_3d.py
+```
+
+## Numerical limitations and scope
+
+- The 3D spectral solver uses a periodic Fourier formulation on a cube; it does
+  not implement non-periodic boundary conditions.
+- The ABC benchmark verifies one specific smooth exact flow and does not
+  establish accuracy for turbulent, high-Reynolds-number, or otherwise complex
+  flows.
+- Pressure reconstruction is not established by this benchmark: the 3D solver
+  projects velocity in Fourier space and does not return pressure.
+- The included low-mode grid comparison is not a spatial-convergence study.
+- The repository does not claim production CFD certification or industrial
+  readiness.
+
+## Roadmap
+
+The following items are proposed future work, not implemented features:
+
+- Add a more demanding Taylor–Green vortex validation study.
+- Conduct broader temporal- and spatial-convergence studies.
+- Implement and verify pressure reconstruction.
+- Add conservation and stability diagnostics.
+- Improve scientific reporting and experiment reproducibility.
