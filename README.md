@@ -3,12 +3,15 @@
 
 # Navier–Stokes Lab
 
-Navier–Stokes Lab is a Python scientific-computing project containing 2D and 3D
-incompressible Navier–Stokes solvers for educational use and numerical
-experimentation. The 2D solver uses a finite-difference fractional-step
-projection method on a periodic square; the 3D solver uses a Fourier
-pseudospectral method on a periodic cube. The repository also includes a
-lid-driven-cavity example. It is not presented as a production CFD package or
+## About
+
+Navier–Stokes Lab is a Python scientific-computing project containing a 2D
+incompressible Navier–Stokes solver using finite differences and a 3D
+incompressible Navier–Stokes solver using a Fourier pseudospectral method. Both
+are intended for education and numerical experimentation. The 2D solver uses a
+fractional-step projection method on a periodic square; the 3D solver uses a
+Fourier pseudospectral method on a periodic cube. The repository also includes
+a lid-driven-cavity example. It is not presented as a production CFD package or
 as a certified solver.
 
 ## Numerical methods: 2D and 3D solvers
@@ -60,9 +63,14 @@ For each step, the solver treats advection explicitly and diffusion implicitly:
 
 $$
 \widehat{\mathbf{u}}^{*}
-= \frac{\widehat{\mathbf{u}}^{\,n}
-- \Delta t\,\widehat{(\mathbf{u}\cdot\nabla)\mathbf{u}}^{\,n}}
-{1+\nu\Delta t\,|\mathbf{k}|^2}.
+=
+\frac{
+\widehat{\mathbf{u}}^{\,n}
+-
+\Delta t\,\widehat{(\mathbf{u}\cdot\nabla)\mathbf{u}}^{\,n}
+}{
+1+\nu\Delta t|\mathbf{k}|^2
+}.
 $$
 
 It then projects the intermediate velocity onto the divergence-free subspace
@@ -89,6 +97,71 @@ records kinetic-energy and maximum-divergence histories. Run
 plots under `results/`. A separate 2D periodic projection demo is available as
 `python scripts/run_taylor_green.py`; it reports energy and divergence and
 saves energy, divergence, and vorticity plots.
+
+#### Reproducible 3D validation experiments
+
+The separate `scripts/run_taylor_green_validation_3d.py` program records the
+3D Taylor–Green kinetic energy, viscous dissipation, and maximum spectral
+divergence at every step. Its default single-run parameters match the 3D demo
+($N=32$, $\nu=0.01$, $\Delta t=0.005$, 200 steps, dealiasing enabled).
+For example:
+
+```bash
+python scripts/run_taylor_green_validation_3d.py run \
+  --n 32 --nu 0.01 --dt 0.005 --steps 200 \
+  --output results/tg3d-validation.json
+```
+
+The program also provides separate `temporal` and `spatial` subcommands:
+
+```bash
+python scripts/run_taylor_green_validation_3d.py temporal \
+  --n 32 --nu 0.01 --dt 0.005 --final-time 0.1 \
+  --output results/tg3d-temporal.json
+python scripts/run_taylor_green_validation_3d.py spatial \
+  --grids 6 12 24 --nu 0.01 --dt 0.005 --final-time 1.0 \
+  --output results/tg3d-spatial.json
+```
+
+Temporal refinement runs at $\Delta t$, $\Delta t/2$, and $\Delta t/4$
+with the same grid and final time. It reports differences between successive
+solutions and observed self-convergence orders; these are not errors against
+an exact Taylor–Green solution. Spatial refinement requires at least three
+increasing nested grid sizes (each fine size must be an integer multiple of
+the previous size), compares solutions at shared coarse-grid nodes using
+$\Delta t/2$, and also runs at $\Delta t$ to measure timestep sensitivity. Its
+JSON reports whether the largest timestep change in final velocity RMS is at
+most 10% of the corresponding spatial difference. A failed control means the
+timestep should be reduced before interpreting spatial differences. Reported
+spatial orders are based on shared-node velocity differences and do not alone
+establish convergence.
+
+The JSON records run parameters, Python and NumPy versions, platform, and all
+diagnostic samples. Output paths are configurable with `--output`; existing
+files are never overwritten. Diagnostics use the periodic grid mean and the
+code's nondimensional units:
+
+$$
+E_h=\frac12\left\langle u^2+v^2+w^2\right\rangle_h,\qquad
+\epsilon_h=\nu\left\langle\sum_{i,j}(D_j u_i)^2\right\rangle_h,\qquad
+\|\nabla\cdot\mathbf{u}\|_{\infty,h}
+=\max_{\mathbf{x}}|\nabla\cdot\mathbf{u}|.
+$$
+
+Here $D_j$ is the periodic Fourier derivative and $\epsilon_h$ is the
+viscous dissipation rate, not the finite-difference estimate
+$-\Delta E/\Delta t$. Energy has units of velocity squared, dissipation of
+velocity squared per time, and divergence of velocity per length, all in code
+units.
+
+Brachet et al. studied 3D Taylor–Green flow with direct spectral simulations
+[*Small-scale structure of the Taylor–Green vortex*](https://doi.org/10.1017/S0022112083001159),
+*Journal of Fluid Mechanics* 130 (1983), 411–452. This repository does not
+claim a directly matched published case. The paper's abstract describes
+viscous runs with Reynolds number based on integral scale, but the precise
+initial-condition normalization, selected Reynolds number, domain, and sampled
+times have not been verified against this experiment. No reference values are
+copied into the JSON or used as acceptance criteria.
 
 ### ABC Beltrami exact solution
 
@@ -191,8 +264,10 @@ time, and whether dealiasing is enabled.
 
 The automated test suite covers solver behavior and benchmark properties. Its
 ABC tests check the initial field, divergence, a short exact-solution
-comparison, and energy; the suite also includes projection and existing 2D
-solver tests.
+comparison, and energy. Taylor–Green validation tests cover energy,
+dissipation, divergence, output reproducibility and collision handling, and
+fixed-final-time temporal and spatial refinement setup. The suite also includes
+projection and existing 2D solver tests.
 
 The ABC temporal-refinement test holds the final time and grid fixed
 ($n=8$, $\nu=0.1$, final time $0.1$) while reducing $\Delta t$ from
@@ -203,9 +278,8 @@ checks the ABC error on grids $n=8,12,16$. Because this field is resolved on
 each grid and the test checks grid-independence rather than an asymptotic error
 rate, it is not evidence of spectral convergence.
 
-The current test run reports **15 tests passed**. Black formatting checks for
-the ABC script and its tests and a Python compile check also pass. These checks,
-including the exact-solution and temporal-refinement tests, are limited to
+At this revision, `python -m pytest -q` reports **27 tests passed**. These
+checks, including exact-solution and temporal-refinement tests, are limited to
 their tested cases; they do not establish accuracy for every flow or grid.
 
 ## Project structure
@@ -219,6 +293,7 @@ their tested cases; they do not establish accuracy for every flow or grid.
 │   ├── ns/
 │   │   ├── solver.py
 │   │   ├── solver3d.py
+│   │   ├── taylor_green_validation.py
 │   │   └── cavity.py
 │   └── navier_stokes_lab/
 │       ├── cavity.py
@@ -229,12 +304,14 @@ their tested cases; they do not establish accuracy for every flow or grid.
 │   ├── test_divergence.py
 │   ├── test_energy_monotone.py
 │   ├── test_fft_poisson.py
-│   └── test_solver3d_projection.py
+│   ├── test_solver3d_projection.py
+│   └── test_taylor_green_validation.py
 └── scripts/
     ├── run_abc_beltrami_3d.py
     ├── run_cavity.py
     ├── run_taylor_green.py
-    └── run_taylor_green_3d.py
+    ├── run_taylor_green_3d.py
+    └── run_taylor_green_validation_3d.py
 ```
 
 ## Numerical limitations and scope
