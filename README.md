@@ -98,6 +98,55 @@ plots under `results/`. A separate 2D periodic projection demo is available as
 `python scripts/run_taylor_green.py`; it reports energy and divergence and
 saves energy, divergence, and vorticity plots.
 
+### Reproducible Taylor–Green validation CLI
+
+The validation workflow is implemented in `src/ns/taylor_green_validation.py`
+and exposed by `scripts/run_taylor_green_validation_3d.py`. It writes a
+versioned JSON document for each experiment. Run a mode with its defaults:
+
+```bash
+python scripts/run_taylor_green_validation_3d.py run
+python scripts/run_taylor_green_validation_3d.py temporal
+python scripts/run_taylor_green_validation_3d.py spatial
+```
+
+The modes, defaults, and default output paths are:
+
+| Mode | Purpose and default configuration | Default output |
+| --- | --- | --- |
+| `run` | One run: `n=32`, `nu=0.01`, `dt=0.005`, `steps=200` | `results/taylor_green_3d_validation.json` |
+| `temporal` | Compare `dt`, `dt/2`, and `dt/4` at fixed final time: `n=32`, `nu=0.01`, largest `dt=0.005`, final time `0.1` | `results/taylor_green_3d_temporal.json` |
+| `spatial` | Compare grids `[6, 12, 24]` using `dt/2` runs for spatial differences and timestep control: `nu=0.01`, coarse `dt=0.005`, final time `1.0` | `results/taylor_green_3d_spatial.json` |
+
+All modes enable 2/3-rule dealiasing by default and accept mutually exclusive
+`--dealias` and `--no-dealias` flags. Each mode also accepts `--output`; the
+target must not already exist. The temporal and spatial comparisons report
+self-differences, not errors against an exact Taylor–Green solution.
+
+The history includes kinetic energy, maximum spectral divergence, and
+`kinetic_energy_dissipation`. For a grid with `N` points in each direction,
+the dissipation diagnostic is the instantaneous semi-discrete rate for the
+implemented spectral diffusion operator:
+
+$$
+\mathcal{D}
+= \frac{\nu}{N^6}
+\sum_{\mathbf{k}} |\mathbf{k}|^2
+\left(
+|\widehat{u}_{\mathbf{k}}|^2
++|\widehat{v}_{\mathbf{k}}|^2
++|\widehat{w}_{\mathbf{k}}|^2
+\right).
+$$
+
+This normalization uses the unnormalized FFT coefficients and gives a
+domain-mean rate. The operator uses raw FFT wavenumber squares, including
+even-grid Nyquist bins. Consequently, this diagnostic is not the finite-step
+backward-Euler energy loss divided by the timestep. It is also not
+interchangeable with the squared norm of real-space first derivatives at
+even-grid Nyquist modes, whose corresponding real-field derivative component
+is zero under the solver's convention.
+
 ### ABC Beltrami exact solution
 
 The 3D ABC benchmark uses the initial velocity field
@@ -211,9 +260,23 @@ checks the ABC error on grids $n=8,12,16$. Because this field is resolved on
 each grid and the test checks grid-independence rather than an asymptotic error
 rate, it is not evidence of spectral convergence.
 
-The published test suite reports **15 tests passed**. These checks, including
-exact-solution and temporal-refinement tests, are limited to their tested
-cases; they do not establish accuracy for every flow or grid.
+The Taylor–Green validation tests are in
+`tests/test_taylor_green_validation.py`. They cover the dissipation diagnostic
+(including Nyquist modes and Parseval normalization), validation output and
+input handling, and temporal and spatial comparison behavior. Together with
+the ABC, projection, and 2D solver tests, they exercise the documented
+behaviors; they do not establish accuracy for every flow or grid.
+
+The spatial mode includes a timestep-sensitivity check: the larger
+final-velocity RMS change between `dt` and `dt/2` at either grid must be no
+more than 10% of the spatial RMS difference for the grid pair. With grids
+`[6, 12, 24]`, `dt=0.005`, and final time `1.0`, this check passed in the
+audited configuration. With the same grids and timestep but final time `0.1`,
+the `12`-to-`24` check failed: its temporal-to-spatial ratio was `18.117`
+against the `0.1` limit. These are configuration-specific timestep-control
+outcomes; a failed check alone is not evidence that the solver is inaccurate.
+Neither passing this check nor reporting refinement differences or observed
+orders establishes spatial convergence.
 
 ## Project structure
 
@@ -226,6 +289,7 @@ cases; they do not establish accuracy for every flow or grid.
 │   ├── ns/
 │   │   ├── solver.py
 │   │   ├── solver3d.py
+│   │   ├── taylor_green_validation.py
 │   │   └── cavity.py
 │   └── navier_stokes_lab/
 │       ├── cavity.py
@@ -236,12 +300,14 @@ cases; they do not establish accuracy for every flow or grid.
 │   ├── test_divergence.py
 │   ├── test_energy_monotone.py
 │   ├── test_fft_poisson.py
-│   └── test_solver3d_projection.py
+│   ├── test_solver3d_projection.py
+│   └── test_taylor_green_validation.py
 └── scripts/
     ├── run_abc_beltrami_3d.py
     ├── run_cavity.py
     ├── run_taylor_green.py
-    └── run_taylor_green_3d.py
+    ├── run_taylor_green_3d.py
+    └── run_taylor_green_validation_3d.py
 ```
 
 ## Numerical limitations and scope
@@ -254,6 +320,9 @@ cases; they do not establish accuracy for every flow or grid.
 - Pressure reconstruction is not established by this benchmark: the 3D solver
   projects velocity in Fourier space and does not return pressure.
 - The included low-mode grid comparison is not a spatial-convergence study.
+- The Taylor–Green spatial-refinement comparisons and timestep-sensitivity
+  checks are configuration-specific; passing them does not establish spatial
+  convergence.
 - The repository does not claim production CFD certification or industrial
   readiness.
 
@@ -261,7 +330,8 @@ cases; they do not establish accuracy for every flow or grid.
 
 The following items are proposed future work, not implemented features:
 
-- Add a more demanding Taylor–Green vortex validation study.
+- Add reference-solution comparisons and broader tested configurations for
+  Taylor–Green validation.
 - Conduct broader temporal- and spatial-convergence studies.
 - Implement and verify pressure reconstruction.
 - Add conservation and stability diagnostics.
