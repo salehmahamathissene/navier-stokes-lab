@@ -27,6 +27,26 @@ def _dealias_mask(n: int) -> np.ndarray:
     return m1[:, None, None] * m1[None, :, None] * m1[None, None, :]
 
 
+def _spectral_kinetic_energy_dissipation(
+    nu: float,
+    uhat: np.ndarray,
+    vhat: np.ndarray,
+    what: np.ndarray,
+    kx: np.ndarray,
+    ky: np.ndarray,
+    kz: np.ndarray,
+) -> float:
+    """Return the quadratic form of the solver's raw-k-squared diffusion operator.
+
+    The raw FFT wavenumber is used at even-grid Nyquist bins, matching the
+    implicit diffusion update even though the corresponding real-field
+    first-derivative component uses a zero-derivative convention.
+    """
+    k2 = kx * kx + ky * ky + kz * kz
+    spectral_speed_squared = np.abs(uhat) ** 2 + np.abs(vhat) ** 2 + np.abs(what) ** 2
+    return float(nu * np.sum(k2 * spectral_speed_squared) / uhat.size**2)
+
+
 def taylor_green_initial(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     x = np.linspace(0.0, 2.0*np.pi, n, endpoint=False)
     X, Y, Z = np.meshgrid(x, x, x, indexing="ij")
@@ -122,15 +142,19 @@ def _project_incompressible(uhat: np.ndarray, vhat: np.ndarray, what: np.ndarray
 def run_spectral_3d(
     p: NS3DParams,
     initial_velocity: tuple[np.ndarray, np.ndarray, np.ndarray],
+    *,
+    record_dissipation: bool = False,
 ) -> dict[str, list[float] | np.ndarray]:
     """Integrate an initial velocity and return histories plus final u, v, w arrays.
 
     Args:
         p: Grid, viscosity, timestep, step-count, and dealiasing parameters.
         initial_velocity: Three real velocity arrays, each with shape (p.n, p.n, p.n).
+        record_dissipation: Include a spectral viscous-dissipation history.
 
     Returns:
         Energy and maximum-divergence histories, plus final velocity components.
+        If requested, the result also contains ``dissipation`` at every step.
     """
     n = p.n
     expected_shape = (n, n, n)
@@ -148,6 +172,7 @@ def run_spectral_3d(
 
     energies: list[float] = []
     divs: list[float] = []
+    dissipations: list[float] | None = [] if record_dissipation else None
 
     def energy(u_, v_, w_) -> float:
         return 0.5 * float(np.mean(u_**2 + v_**2 + w_**2))
@@ -159,6 +184,10 @@ def run_spectral_3d(
         div = np.fft.ifftn(div_hat).real
         energies.append(energy(u, v, w))
         divs.append(float(np.max(np.abs(div))))
+        if dissipations is not None:
+            dissipations.append(
+                _spectral_kinetic_energy_dissipation(p.nu, uhat, vhat, what, kx, ky, kz)
+            )
 
         if step % 20 == 0:
             print(f"step={step:04d}  KE={energies[-1]:.6e}  max|div|={divs[-1]:.3e}")
@@ -209,7 +238,16 @@ def run_spectral_3d(
         v = np.fft.ifftn(vhat_new).real
         w = np.fft.ifftn(what_new).real
 
-    return {"energy": energies, "max_div": divs, "u": u, "v": v, "w": w}
+    result: dict[str, list[float] | np.ndarray] = {
+        "energy": energies,
+        "max_div": divs,
+        "u": u,
+        "v": v,
+        "w": w,
+    }
+    if dissipations is not None:
+        result["dissipation"] = dissipations
+    return result
 
 
 def run_taylor_green_3d(p: NS3DParams) -> dict[str, list[float]]:
